@@ -126,7 +126,6 @@ export default function Home() {
     detectionIntervalRef.current = undefined;
     sessionTimerRef.current = undefined;
 
-    // Use a function for setState to get the latest state
     let finalKicks = 0;
     let finalPunches = 0;
     setKicks(k => { finalKicks = k; return k; });
@@ -382,7 +381,7 @@ export default function Home() {
                 <ul className="list-disc list-inside text-xs">
                   <li>Ensure you are in a well-lit area.</li>
                   <li>Have a clear, non-cluttered background.</li>
-                  <li>Stay centered in the video frame.</li>
+                  <li>Face the camera directly for best punch detection.</li>
                   <li>Full body should be visible for kicks.</li>
                 </ul>
               </AlertDescription>
