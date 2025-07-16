@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KickIcon, PunchIcon } from "@/components/icons";
-import { LayoutDashboard, Trophy, Info, ArrowLeft, Target } from "lucide-react";
+import { LayoutDashboard, Trophy, Info, ArrowLeft } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { detectStrike } from "@/ai/flows/detect-strike-flow";
@@ -38,11 +38,14 @@ export default function Home() {
   const [timeRemaining, setTimeRemaining] = useState(SESSION_DURATION);
   const [kicks, setKicks] = useState(0);
   const [punches, setPunches] = useState(0);
+  const [finalScore, setFinalScore] = useState(0);
   const [topScore, setTopScore] = useState(0);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const detectionIntervalRef = useRef<NodeJS.Timeout>();
+  const sessionTimerRef = useRef<NodeJS.Timeout>();
+
   const { toast } = useToast();
 
   useEffect(() => {
@@ -75,20 +78,26 @@ export default function Home() {
     }
   }, []);
 
-  const resetSession = useCallback(() => {
-    setSessionState("idle");
-    setTimeRemaining(SESSION_DURATION);
-    const currentScore = kicks + punches;
-    if (currentScore > topScore) {
-      setTopScore(currentScore);
-      localStorage.setItem("topScore", currentScore.toString());
+  const stopSession = useCallback((currentKicks: number, currentPunches: number, game: GameMode | null) => {
+    if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
+    if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
+    detectionIntervalRef.current = undefined;
+    sessionTimerRef.current = undefined;
+
+    setSessionState("finished");
+
+    if (game) {
+      const config = gameConfig[game];
+      const currentScore = config.strikeType === 'kicks' ? currentKicks : currentPunches;
+      setFinalScore(currentScore);
+
+      if (currentScore > topScore) {
+        setTopScore(currentScore);
+        localStorage.setItem("topScore", currentScore.toString());
+      }
     }
-    setKicks(0);
-    setPunches(0);
-    if (detectionIntervalRef.current) {
-      clearInterval(detectionIntervalRef.current);
-    }
-  }, [kicks, punches, topScore]);
+  }, [topScore]);
+
 
   const captureAndDetect = useCallback(async () => {
     if (videoRef.current && canvasRef.current) {
@@ -114,46 +123,56 @@ export default function Home() {
       }
     }
   }, []);
+  
+  const startSession = useCallback(() => {
+    setSessionState("running");
+    setTimeRemaining(SESSION_DURATION);
+    setPunches(0);
+    setKicks(0);
+    setFinalScore(0);
+    detectionIntervalRef.current = setInterval(captureAndDetect, CAPTURE_INTERVAL);
+    sessionTimerRef.current = setInterval(() => {
+      setTimeRemaining((prev) => prev - 1);
+    }, 1000);
+  }, [captureAndDetect]);
 
   useEffect(() => {
-    let timer: NodeJS.Timeout;
     if (sessionState === "running") {
-      detectionIntervalRef.current = setInterval(captureAndDetect, CAPTURE_INTERVAL);
+      if (timeRemaining <= 0) {
+        stopSession(kicks, punches, selectedGame);
+      }
+      if (selectedGame) {
+        const config = gameConfig[selectedGame];
+        const currentCount = config.strikeType === 'kicks' ? kicks : punches;
+        if (currentCount >= config.goal) {
+          stopSession(kicks, punches, selectedGame);
+        }
+      }
     }
-
-    if (sessionState === "running" && timeRemaining > 0) {
-      timer = setInterval(() => {
-        setTimeRemaining((prev) => prev - 1);
-      }, 1000);
-    } else if (timeRemaining === 0 && sessionState === "running") {
-      setSessionState("finished");
-      // Don't reset session here, show results screen first
-    }
-    
+    // Cleanup timers when component unmounts or session stops
     return () => {
-      clearInterval(timer);
-      if (detectionIntervalRef.current) {
-        clearInterval(detectionIntervalRef.current);
+      if (sessionState !== 'running') {
+        if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
+        if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
       }
     };
-  }, [sessionState, timeRemaining, captureAndDetect]);
+  }, [sessionState, timeRemaining, kicks, punches, selectedGame, stopSession]);
 
   const handleStartButtonClick = () => {
     if (sessionState === "idle" || sessionState === "finished") {
-      resetSession();
-      setTimeRemaining(SESSION_DURATION);
-      setSessionState("running");
+      startSession();
     } else { // running
-      setSessionState("finished");
-       if (detectionIntervalRef.current) {
-        clearInterval(detectionIntervalRef.current);
-      }
+      stopSession(kicks, punches, selectedGame);
     }
   };
 
   const handleBackToSelection = () => {
-    resetSession();
+    setSessionState("idle");
     setSelectedGame(null);
+    setPunches(0);
+    setKicks(0);
+    setFinalScore(0);
+    setTimeRemaining(SESSION_DURATION);
   };
 
   const buttonText = {
@@ -203,14 +222,7 @@ export default function Home() {
     if (!selectedGame) return null;
     const config = gameConfig[selectedGame];
     const currentCount = config.strikeType === 'kicks' ? kicks : punches;
-    const isGoalReached = currentCount >= config.goal;
-
-     if (isGoalReached && sessionState === "running") {
-      setSessionState("finished");
-       if (detectionIntervalRef.current) {
-        clearInterval(detectionIntervalRef.current);
-      }
-    }
+    const isGoalReached = finalScore >= config.goal;
 
     return (
       <div className="relative z-10 w-full flex flex-col items-center justify-center h-full p-4">
@@ -238,7 +250,7 @@ export default function Home() {
                         {isGoalReached ? "Challenge Complete!" : "Time's Up!"}
                     </h2>
                     <p className="text-2xl text-muted-foreground mb-2">You landed</p>
-                    <p className="text-8xl font-bold font-mono text-primary mb-4">{currentCount} <span className="text-6xl">{config.strikeType}</span></p>
+                    <p className="text-8xl font-bold font-mono text-primary mb-4">{finalScore} <span className="text-6xl">{config.strikeType}</span></p>
                     <p className="text-xl text-muted-foreground">
                         {isGoalReached ? `You did it in ${SESSION_DURATION - timeRemaining} seconds!` : "Better luck next time!"}
                     </p>
