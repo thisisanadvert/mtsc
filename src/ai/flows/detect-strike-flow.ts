@@ -13,6 +13,7 @@ import {
   DetectStrikeOutput,
   DetectStrikeOutputSchema,
 } from '@/ai/schemas/strike-schemas';
+import { googleAI } from '@genkit-ai/googleai';
 
 export type { DetectStrikeInput, DetectStrikeOutput };
 
@@ -29,6 +30,7 @@ const detectStrikePrompt = ai.definePrompt({
   Image: {{media url=imageDataUri}}
   
   Respond with "punch", "kick", or "none".`,
+  model: googleAI('gemini-pro-vision'),
 });
 
 const detectStrikeFlow = ai.defineFlow(
@@ -38,7 +40,13 @@ const detectStrikeFlow = ai.defineFlow(
     outputSchema: DetectStrikeOutputSchema,
   },
   async (input) => {
-    const { output } = await detectStrikePrompt(input);
-    return output!;
+    try {
+      const { output } = await detectStrikePrompt(input);
+      return output!;
+    } catch (error) {
+       console.error("Error in detectStrikeFlow:", error);
+       // Return 'none' to avoid breaking the app flow on API errors
+       return { strike: 'none' };
+    }
   }
 );
