@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -5,7 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KickIcon, PunchIcon } from "@/components/icons";
-import { LayoutDashboard, Trophy } from "lucide-react";
+import { LayoutDashboard, Trophy, Info } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { detectStrike } from "@/ai/flows/detect-strike-flow";
@@ -13,6 +14,7 @@ import { detectStrike } from "@/ai/flows/detect-strike-flow";
 type SessionState = "idle" | "running" | "finished";
 
 const SESSION_DURATION = 30;
+const CAPTURE_INTERVAL = 500; // Capture a frame every 500ms
 
 export default function Home() {
   const [sessionState, setSessionState] = useState<SessionState>("idle");
@@ -23,6 +25,7 @@ export default function Home() {
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const detectionIntervalRef = useRef<NodeJS.Timeout>();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -65,6 +68,9 @@ export default function Home() {
     }
     setKicks(0);
     setPunches(0);
+    if (detectionIntervalRef.current) {
+      clearInterval(detectionIntervalRef.current);
+    }
   }, [kicks, punches, topScore]);
 
   const captureAndDetect = useCallback(async () => {
@@ -87,28 +93,32 @@ export default function Home() {
           }
         } catch (error) {
           console.error("Error detecting strike:", error);
-          toast({
-            variant: "destructive",
-            title: "Strike Detection Failed",
-            description: "Could not analyze the video frame. Please try again.",
-          });
         }
       }
     }
-  }, [toast]);
+  }, []);
 
   useEffect(() => {
     let timer: NodeJS.Timeout;
+    if (sessionState === "running") {
+      detectionIntervalRef.current = setInterval(captureAndDetect, CAPTURE_INTERVAL);
+    }
+
     if (sessionState === "running" && timeRemaining > 0) {
       timer = setInterval(() => {
         setTimeRemaining((prev) => prev - 1);
-        captureAndDetect();
       }, 1000);
     } else if (timeRemaining === 0 && sessionState === "running") {
       setSessionState("finished");
       resetSession();
     }
-    return () => clearInterval(timer);
+    
+    return () => {
+      clearInterval(timer);
+      if (detectionIntervalRef.current) {
+        clearInterval(detectionIntervalRef.current);
+      }
+    };
   }, [sessionState, timeRemaining, resetSession, captureAndDetect]);
 
   const handleButtonClick = () => {
@@ -185,7 +195,21 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="w-full max-w-xs mt-auto">
+          <div className="w-full max-w-xs mt-auto flex flex-col gap-4">
+            {sessionState !== "running" && (
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertTitle>Pro Tips for Best Results</AlertTitle>
+                <AlertDescription>
+                  <ul className="list-disc list-inside text-xs">
+                    <li>Ensure you are in a well-lit area.</li>
+                    <li>Have a clear, non-cluttered background.</li>
+                    <li>Stay centered in the video frame.</li>
+                    <li>Full body should be visible for kicks.</li>
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
             <Button
               onClick={handleButtonClick}
               size="lg"
