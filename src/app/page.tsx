@@ -16,6 +16,9 @@ type GameMode = "100-kicks" | "300-punches";
 
 const SESSION_DURATION = 60; // 1 minute for both challenges
 const CAPTURE_INTERVAL = 500; // Capture a frame every 500ms
+const CAPTURE_WIDTH = 480;
+const CAPTURE_HEIGHT = 360;
+
 
 const gameConfig = {
   "100-kicks": {
@@ -45,6 +48,7 @@ export default function Home() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const detectionIntervalRef = useRef<NodeJS.Timeout>();
   const sessionTimerRef = useRef<NodeJS.Timeout>();
+  const isDetecting = useRef(false);
 
   const { toast } = useToast();
 
@@ -78,17 +82,22 @@ export default function Home() {
     }
   }, []);
 
-  const stopSession = useCallback((currentKicks: number, currentPunches: number, game: GameMode | null) => {
+  const stopSession = useCallback(() => {
+    setSessionState("finished");
     if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
     if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
     detectionIntervalRef.current = undefined;
     sessionTimerRef.current = undefined;
 
-    setSessionState("finished");
+    // Use a function for setState to get the latest state
+    let finalKicks = 0;
+    let finalPunches = 0;
+    setKicks(k => { finalKicks = k; return k; });
+    setPunches(p => { finalPunches = p; return p; });
 
-    if (game) {
-      const config = gameConfig[game];
-      const currentScore = config.strikeType === 'kicks' ? currentKicks : currentPunches;
+    if (selectedGame) {
+      const config = gameConfig[selectedGame];
+      const currentScore = config.strikeType === 'kicks' ? finalKicks : finalPunches;
       setFinalScore(currentScore);
 
       if (currentScore > topScore) {
@@ -96,33 +105,41 @@ export default function Home() {
         localStorage.setItem("topScore", currentScore.toString());
       }
     }
-  }, [topScore]);
+  }, [selectedGame, topScore]);
 
 
   const captureAndDetect = useCallback(async () => {
+    if (isDetecting.current) return;
     if (videoRef.current && canvasRef.current) {
+      isDetecting.current = true;
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      canvas.width = CAPTURE_WIDTH;
+      canvas.height = CAPTURE_HEIGHT;
       const context = canvas.getContext('2d');
       if (context) {
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const imageDataUri = canvas.toDataURL('image/jpeg');
+        const imageDataUri = canvas.toDataURL('image/jpeg', 0.8);
         
         try {
           const { strike } = await detectStrike({ imageDataUri });
-          if (strike === 'punch') {
-            setPunches((p) => p + 1);
-          } else if (strike === 'kick') {
-            setKicks((k) => k + 1);
+          if (sessionState === 'running') {
+            if (strike === 'punch') {
+              setPunches((p) => p + 1);
+            } else if (strike === 'kick') {
+              setKicks((k) => k + 1);
+            }
           }
         } catch (error) {
           console.error("Error detecting strike:", error);
+        } finally {
+          isDetecting.current = false;
         }
+      } else {
+        isDetecting.current = false;
       }
     }
-  }, []);
+  }, [sessionState]);
   
   const startSession = useCallback(() => {
     setSessionState("running");
@@ -132,37 +149,37 @@ export default function Home() {
     setFinalScore(0);
     detectionIntervalRef.current = setInterval(captureAndDetect, CAPTURE_INTERVAL);
     sessionTimerRef.current = setInterval(() => {
-      setTimeRemaining((prev) => prev - 1);
+      setTimeRemaining((prev) => {
+        if (prev <= 1) {
+          stopSession();
+          return 0;
+        }
+        return prev - 1;
+      });
     }, 1000);
-  }, [captureAndDetect]);
+  }, [captureAndDetect, stopSession]);
 
   useEffect(() => {
-    if (sessionState === "running") {
-      if (timeRemaining <= 0) {
-        stopSession(kicks, punches, selectedGame);
-      }
-      if (selectedGame) {
-        const config = gameConfig[selectedGame];
-        const currentCount = config.strikeType === 'kicks' ? kicks : punches;
-        if (currentCount >= config.goal) {
-          stopSession(kicks, punches, selectedGame);
-        }
+    if (sessionState === "running" && selectedGame) {
+      const config = gameConfig[selectedGame];
+      const currentCount = config.strikeType === 'kicks' ? kicks : punches;
+      if (currentCount >= config.goal) {
+        stopSession();
       }
     }
-    // Cleanup timers when component unmounts or session stops
+    // Cleanup timers when component unmounts
     return () => {
-      if (sessionState !== 'running') {
-        if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
-        if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
-      }
+      if (detectionIntervalRef.current) clearInterval(detectionIntervalRef.current);
+      if (sessionTimerRef.current) clearInterval(sessionTimerRef.current);
     };
-  }, [sessionState, timeRemaining, kicks, punches, selectedGame, stopSession]);
+  }, [sessionState, kicks, punches, selectedGame, stopSession]);
 
   const handleStartButtonClick = () => {
+    if (hasCameraPermission !== true) return;
     if (sessionState === "idle" || sessionState === "finished") {
       startSession();
     } else { // running
-      stopSession(kicks, punches, selectedGame);
+      stopSession();
     }
   };
 
