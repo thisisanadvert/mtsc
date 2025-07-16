@@ -29,7 +29,7 @@ export default function DashboardLayout({
         <SidebarHeader>
           <Link href="/" className="flex items-center gap-2">
             <Trophy className="w-8 h-8 text-primary" />
-            <span className="text-xl font-bold font-headline">CounterPunch</span>
+            <span className="text-xl font-bold font-headline">Strike Counter</span>
           </Link>
         </SidebarHeader>
         <SidebarContent>

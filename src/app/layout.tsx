@@ -3,7 +3,7 @@ import { Toaster } from '@/components/ui/toaster';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'CounterPunch',
+  title: 'Strike Counter',
   description: 'Muay Thai Strike Counter',
 };
 

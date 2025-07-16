@@ -128,7 +128,7 @@ export default function Home() {
   return (
     <div className="flex flex-col h-screen bg-background text-foreground p-4">
       <header className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold text-primary font-headline">CounterPunch</h1>
+        <h1 className="text-2xl font-bold text-primary font-headline">Strike Counter</h1>
         <div className="flex items-center gap-4">
           <Card className="bg-card/80 border-primary/50 text-center">
             <CardContent className="p-2 flex items-center gap-2">
