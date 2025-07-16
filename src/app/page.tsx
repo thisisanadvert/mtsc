@@ -3,16 +3,32 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import { useForm, type SubmitHandler } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KickIcon, PunchIcon } from "@/components/icons";
-import { LayoutDashboard, Trophy, Info, ArrowLeft } from "lucide-react";
+import { LayoutDashboard, Trophy, Info, ArrowLeft, User, Instagram } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { detectStrike } from "@/ai/flows/detect-strike-flow";
+import { Input } from "@/components/ui/input";
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 
 type SessionState = "idle" | "running" | "finished";
 type GameMode = "100-kicks" | "300-punches";
+type UserProfile = {
+  name: string;
+  instagram?: string;
+};
+
+const UserProfileSchema = z.object({
+  name: z.string().min(2, { message: "Name must be at least 2 characters." }),
+  instagram: z.string().optional(),
+});
+
 
 const SESSION_DURATION = 60; // 1 minute for both challenges
 const CAPTURE_INTERVAL = 500; // Capture a frame every 500ms
@@ -36,6 +52,7 @@ const gameConfig = {
 };
 
 export default function Home() {
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [selectedGame, setSelectedGame] = useState<GameMode | null>(null);
   const [sessionState, setSessionState] = useState<SessionState>("idle");
   const [timeRemaining, setTimeRemaining] = useState(SESSION_DURATION);
@@ -51,6 +68,26 @@ export default function Home() {
   const isDetecting = useRef(false);
 
   const { toast } = useToast();
+
+  const form = useForm<z.infer<typeof UserProfileSchema>>({
+    resolver: zodResolver(UserProfileSchema),
+    defaultValues: {
+      name: "",
+      instagram: "",
+    },
+  });
+
+  useEffect(() => {
+    try {
+      const storedProfile = localStorage.getItem("userProfile");
+      if (storedProfile) {
+        setUserProfile(JSON.parse(storedProfile));
+      }
+    } catch (error) {
+      console.error("Failed to parse user profile from localStorage", error);
+      localStorage.removeItem("userProfile");
+    }
+  }, []);
 
   useEffect(() => {
     const getCameraPermission = async () => {
@@ -103,9 +140,12 @@ export default function Home() {
       if (currentScore > topScore) {
         setTopScore(currentScore);
         localStorage.setItem("topScore", currentScore.toString());
+        if (userProfile) {
+          localStorage.setItem(`leaderboard_you`, JSON.stringify({ name: userProfile.name, score: currentScore, instagram: userProfile.instagram }));
+        }
       }
     }
-  }, [selectedGame, topScore]);
+  }, [selectedGame, topScore, userProfile]);
 
 
   const captureAndDetect = useCallback(async () => {
@@ -191,12 +231,69 @@ export default function Home() {
     setFinalScore(0);
     setTimeRemaining(SESSION_DURATION);
   };
+  
+  const onProfileSubmit: SubmitHandler<z.infer<typeof UserProfileSchema>> = (data) => {
+    const profile = { name: data.name, instagram: data.instagram || undefined };
+    localStorage.setItem("userProfile", JSON.stringify(profile));
+    setUserProfile(profile);
+  };
+
 
   const buttonText = {
     idle: "Start Challenge",
     running: "Stop Challenge",
     finished: "Try Again",
   };
+  
+  const renderProfileForm = () => (
+    <div className="relative z-10 w-full max-w-sm mx-auto">
+      <Card>
+        <CardHeader>
+          <CardTitle>Welcome to Strike Counter!</CardTitle>
+          <CardContent className="pt-4 px-0 pb-0">
+            <p className="text-muted-foreground mb-4">Please create a profile to track your scores on the leaderboard.</p>
+            <Form {...form}>
+              <form onSubmit={form.handleSubmit(onProfileSubmit)} className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
+                      <FormControl>
+                        <div className="relative flex items-center">
+                           <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                           <Input placeholder="e.g. John Doe" {...field} className="pl-9" />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="instagram"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Instagram (Optional)</FormLabel>
+                      <FormControl>
+                         <div className="relative flex items-center">
+                           <Instagram className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                           <Input placeholder="e.g. johndoe" {...field} className="pl-9" />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <Button type="submit" className="w-full">Save Profile & Start</Button>
+              </form>
+            </Form>
+          </CardContent>
+        </CardHeader>
+      </Card>
+    </div>
+  );
 
   const renderGameSelection = () => (
     <div className="w-full max-w-2xl mx-auto text-center">
@@ -348,7 +445,11 @@ export default function Home() {
           </div>
         )}
 
-        {selectedGame ? renderTrainingSession() : renderGameSelection()}
+        {!userProfile
+          ? renderProfileForm()
+          : selectedGame
+          ? renderTrainingSession()
+          : renderGameSelection()}
       </main>
     </div>
   );

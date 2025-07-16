@@ -1,3 +1,6 @@
+
+"use client"
+
 import {
   Table,
   TableBody,
@@ -10,16 +13,76 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Instagram } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
-const leaderboardData = [
-  { rank: 1, name: "Ryu", score: 124, avatar: "R", instagram: "ryu" },
-  { rank: 2, name: "Chun-Li", score: 118, avatar: "CL", instagram: null },
-  { rank: 3, name: "Sagat", score: 112, avatar: "S", instagram: "sagat" },
-  { rank: 4, name: "You", score: 60, avatar: "Y", isCurrentUser: true, instagram: "you" },
-  { rank: 5, name: "Ken", score: 58, avatar: "K", instagram: null },
+type Player = {
+  rank: number;
+  name: string;
+  score: number;
+  avatar: string;
+  instagram: string | null;
+  isCurrentUser?: boolean;
+};
+
+const defaultLeaderboardData: Omit<Player, 'rank'>[] = [
+  { name: "Ryu", score: 124, avatar: "R", instagram: "ryu" },
+  { name: "Chun-Li", score: 118, avatar: "CL", instagram: null },
+  { name: "Sagat", score: 112, avatar: "S", instagram: "sagat" },
+  { name: "Ken", score: 58, avatar: "K", instagram: null },
 ];
 
 export function Leaderboard() {
+  const [leaderboardData, setLeaderboardData] = useState<Player[]>([]);
+
+  useEffect(() => {
+    const youDataString = localStorage.getItem("leaderboard_you");
+    let youData = null;
+    if (youDataString) {
+      try {
+        const parsed = JSON.parse(youDataString);
+        youData = {
+          name: parsed.name || "You",
+          score: parsed.score || 0,
+          avatar: (parsed.name || "Y").charAt(0).toUpperCase(),
+          instagram: parsed.instagram || null,
+          isCurrentUser: true,
+        };
+      } catch (e) {
+        console.error("Could not parse user data from local storage", e)
+      }
+    } else {
+        const profileString = localStorage.getItem("userProfile");
+        if(profileString) {
+            try {
+                const parsed = JSON.parse(profileString);
+                youData = {
+                    name: parsed.name || "You",
+                    score: 0,
+                    avatar: (parsed.name || "Y").charAt(0).toUpperCase(),
+                    instagram: parsed.instagram || null,
+                    isCurrentUser: true,
+                };
+            } catch (e) {
+                 console.error("Could not parse user profile from local storage", e)
+            }
+        }
+    }
+    
+    const combinedData = [...defaultLeaderboardData];
+    if (youData) {
+      combinedData.push(youData);
+    }
+    
+    const sortedData = combinedData
+      .sort((a, b) => b.score - a.score)
+      .map((player, index) => ({
+        ...player,
+        rank: index + 1,
+      }));
+
+    setLeaderboardData(sortedData);
+  }, []);
+
   return (
     <Card className="h-full">
       <CardHeader>
