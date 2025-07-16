@@ -10,7 +10,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KickIcon, PunchIcon } from "@/components/icons";
-import { LayoutDashboard, Trophy, Info, ArrowLeft, User, Instagram } from "lucide-react";
+import { LayoutDashboard, Trophy, Info, ArrowLeft, User, Instagram, LogOut } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { detectStrike } from "@/ai/flows/detect-strike-flow";
@@ -237,6 +237,12 @@ export default function Home() {
     setUserProfile(profile);
   };
 
+  const handleSwitchUser = () => {
+    localStorage.removeItem("userProfile");
+    setUserProfile(null);
+    form.reset({ name: "", instagram: "" });
+  };
+
 
   const buttonText = {
     idle: "Start Challenge",
@@ -381,8 +387,14 @@ export default function Home() {
                 <ul className="list-disc list-inside text-xs">
                   <li>Ensure you are in a well-lit area.</li>
                   <li>Have a clear, non-cluttered background.</li>
-                  <li>Face the camera directly for best punch detection.</li>
-                  <li>Full body should be visible for kicks.</li>
+                  <li>
+                    <strong>Punches:</strong> Stand facing the camera and punch
+                    directly towards it for best detection.
+                  </li>
+                  <li>
+                    <strong>Kicks:</strong> Ensure your full body is visible in
+                    the camera frame.
+                  </li>
                 </ul>
               </AlertDescription>
             </Alert>
@@ -418,6 +430,12 @@ export default function Home() {
               </div>
             </CardContent>
           </Card>
+           {userProfile && (
+            <Button variant="outline" size="icon" onClick={handleSwitchUser} title="Switch User">
+              <LogOut className="h-5 w-5" />
+              <span className="sr-only">Switch User</span>
+            </Button>
+          )}
           <Button asChild variant="outline" size="icon">
             <Link href="/dashboard">
               <LayoutDashboard className="h-5 w-5" />
@@ -453,3 +471,5 @@ export default function Home() {
     </div>
   );
 }
+
+    
