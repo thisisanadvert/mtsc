@@ -4,23 +4,17 @@
  * @fileOverview This file defines a Genkit flow for summarizing a Muay Thai training session.
  *
  * - summarizeSession - A function that takes session data and returns a GenAI summary.
- * - SummarizeSessionInput - The input type for the summarizeSession function.
- * - SummarizeSessionOutput - The return type for the summarizeSession function.
  */
 
 import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import {
+  SummarizeSessionInput,
+  SummarizeSessionInputSchema,
+  SummarizeSessionOutput,
+  SummarizeSessionOutputSchema,
+} from '@/ai/schemas/summary-schemas';
 
-const SummarizeSessionInputSchema = z.object({
-  sessionDetails: z.string().describe('Details of the Muay Thai training session, including strike counts and timestamps.'),
-  userGoals: z.string().describe('The user specified goals for the session'),
-});
-export type SummarizeSessionInput = z.infer<typeof SummarizeSessionInputSchema>;
-
-const SummarizeSessionOutputSchema = z.object({
-  summary: z.string().describe('A GenAI-generated summary of the Muay Thai training session.'),
-});
-export type SummarizeSessionOutput = z.infer<typeof SummarizeSessionOutputSchema>;
+export type { SummarizeSessionInput, SummarizeSessionOutput };
 
 export async function summarizeSession(input: SummarizeSessionInput): Promise<SummarizeSessionOutput> {
   return summarizeSessionFlow(input);

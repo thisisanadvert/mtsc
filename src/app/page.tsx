@@ -8,6 +8,7 @@ import { KickIcon, PunchIcon } from "@/components/icons";
 import { LayoutDashboard, Trophy } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
+import { detectStrike } from "@/ai/flows/detect-strike-flow";
 
 type SessionState = "idle" | "running" | "finished";
 
@@ -21,6 +22,7 @@ export default function Home() {
   const [topScore, setTopScore] = useState(0);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -65,26 +67,49 @@ export default function Home() {
     setPunches(0);
   }, [kicks, punches, topScore]);
 
+  const captureAndDetect = useCallback(async () => {
+    if (videoRef.current && canvasRef.current) {
+      const video = videoRef.current;
+      const canvas = canvasRef.current;
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const context = canvas.getContext('2d');
+      if (context) {
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageDataUri = canvas.toDataURL('image/jpeg');
+        
+        try {
+          const { strike } = await detectStrike({ imageDataUri });
+          if (strike === 'punch') {
+            setPunches((p) => p + 1);
+          } else if (strike === 'kick') {
+            setKicks((k) => k + 1);
+          }
+        } catch (error) {
+          console.error("Error detecting strike:", error);
+          toast({
+            variant: "destructive",
+            title: "Strike Detection Failed",
+            description: "Could not analyze the video frame. Please try again.",
+          });
+        }
+      }
+    }
+  }, [toast]);
+
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (sessionState === "running" && timeRemaining > 0) {
       timer = setInterval(() => {
         setTimeRemaining((prev) => prev - 1);
-        // Simulate strike detection
-        if (Math.random() > 0.6) {
-          if (Math.random() > 0.5) {
-            setKicks((k) => k + 1);
-          } else {
-            setPunches((p) => p + 1);
-          }
-        }
+        captureAndDetect();
       }, 1000);
     } else if (timeRemaining === 0 && sessionState === "running") {
       setSessionState("finished");
       resetSession();
     }
     return () => clearInterval(timer);
-  }, [sessionState, timeRemaining, resetSession]);
+  }, [sessionState, timeRemaining, resetSession, captureAndDetect]);
 
   const handleButtonClick = () => {
     if (sessionState === "idle" || sessionState === "finished") {
@@ -126,6 +151,7 @@ export default function Home() {
       <main className="flex-1 flex flex-col items-center justify-center relative">
         <div className="absolute inset-0 w-full h-full bg-card rounded-xl border-2 border-dashed border-border flex items-center justify-center overflow-hidden">
           <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
+          <canvas ref={canvasRef} className="hidden"></canvas>
         </div>
         
         {hasCameraPermission === false && (
