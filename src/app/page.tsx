@@ -6,17 +6,34 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KickIcon, PunchIcon } from "@/components/icons";
-import { LayoutDashboard, Trophy, Info } from "lucide-react";
+import { LayoutDashboard, Trophy, Info, ArrowLeft, Target } from "lucide-react";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { detectStrike } from "@/ai/flows/detect-strike-flow";
 
 type SessionState = "idle" | "running" | "finished";
+type GameMode = "100-kicks" | "300-punches";
 
-const SESSION_DURATION = 30;
+const SESSION_DURATION = 60; // 1 minute for both challenges
 const CAPTURE_INTERVAL = 500; // Capture a frame every 500ms
 
+const gameConfig = {
+  "100-kicks": {
+    title: "100 Kicks Challenge",
+    goal: 100,
+    strikeType: "kicks",
+    Icon: KickIcon,
+  },
+  "300-punches": {
+    title: "300 Punches Challenge",
+    goal: 300,
+    strikeType: "punches",
+    Icon: PunchIcon,
+  },
+};
+
 export default function Home() {
+  const [selectedGame, setSelectedGame] = useState<GameMode | null>(null);
   const [sessionState, setSessionState] = useState<SessionState>("idle");
   const [timeRemaining, setTimeRemaining] = useState(SESSION_DURATION);
   const [kicks, setKicks] = useState(0);
@@ -110,7 +127,7 @@ export default function Home() {
       }, 1000);
     } else if (timeRemaining === 0 && sessionState === "running") {
       setSessionState("finished");
-      resetSession();
+      // Don't reset session here, show results screen first
     }
     
     return () => {
@@ -119,21 +136,148 @@ export default function Home() {
         clearInterval(detectionIntervalRef.current);
       }
     };
-  }, [sessionState, timeRemaining, resetSession, captureAndDetect]);
+  }, [sessionState, timeRemaining, captureAndDetect]);
 
-  const handleButtonClick = () => {
+  const handleStartButtonClick = () => {
     if (sessionState === "idle" || sessionState === "finished") {
-      setSessionState("running");
-    } else {
       resetSession();
+      setTimeRemaining(SESSION_DURATION);
+      setSessionState("running");
+    } else { // running
+      setSessionState("finished");
+       if (detectionIntervalRef.current) {
+        clearInterval(detectionIntervalRef.current);
+      }
     }
   };
 
-  const buttonText = {
-    idle: "Start Session",
-    running: "Stop Session",
-    finished: "Start New Session",
+  const handleBackToSelection = () => {
+    resetSession();
+    setSelectedGame(null);
   };
+
+  const buttonText = {
+    idle: "Start Challenge",
+    running: "Stop Challenge",
+    finished: "Try Again",
+  };
+
+  const renderGameSelection = () => (
+    <div className="w-full max-w-2xl mx-auto text-center">
+      <h2 className="text-3xl font-bold mb-2 font-headline">Choose Your Challenge</h2>
+      <p className="text-muted-foreground mb-8">Select a game mode to start your training session.</p>
+      <div className="grid md:grid-cols-2 gap-6">
+        <Card 
+          className="bg-card/80 hover:bg-primary/20 border-2 border-transparent hover:border-primary cursor-pointer transition-all duration-300 transform hover:-translate-y-1"
+          onClick={() => setSelectedGame("100-kicks")}
+        >
+          <CardHeader>
+            <CardTitle className="flex flex-col items-center gap-4">
+              <KickIcon className="w-20 h-20 text-primary" />
+              <span>100 Kicks Challenge</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">Land 100 kicks in 60 seconds.</p>
+          </CardContent>
+        </Card>
+        <Card 
+          className="bg-card/80 hover:bg-primary/20 border-2 border-transparent hover:border-primary cursor-pointer transition-all duration-300 transform hover:-translate-y-1"
+          onClick={() => setSelectedGame("300-punches")}
+        >
+          <CardHeader>
+            <CardTitle className="flex flex-col items-center gap-4">
+              <PunchIcon className="w-20 h-20 text-primary" />
+              <span>300 Punches Challenge</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">Land 300 punches in 60 seconds.</p>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+
+  const renderTrainingSession = () => {
+    if (!selectedGame) return null;
+    const config = gameConfig[selectedGame];
+    const currentCount = config.strikeType === 'kicks' ? kicks : punches;
+    const isGoalReached = currentCount >= config.goal;
+
+     if (isGoalReached && sessionState === "running") {
+      setSessionState("finished");
+       if (detectionIntervalRef.current) {
+        clearInterval(detectionIntervalRef.current);
+      }
+    }
+
+    return (
+      <div className="relative z-10 w-full flex flex-col items-center justify-center h-full p-4">
+        <div className="absolute top-4 left-4">
+            <Button variant="ghost" size="sm" onClick={handleBackToSelection}>
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back
+            </Button>
+        </div>
+        <div className="absolute top-4 text-6xl font-bold text-accent font-mono tabular-nums bg-background/50 backdrop-blur-sm px-4 py-2 rounded-lg">
+          {timeRemaining}
+        </div>
+
+        <div className="flex-1 flex items-center justify-center w-full">
+          <div className="text-center">
+            {sessionState !== "finished" ? (
+                <>
+                    <config.Icon className="w-24 h-24 text-primary mx-auto mb-4" />
+                    <span className="text-9xl font-bold font-mono tabular-nums text-foreground transition-all duration-300">{currentCount}</span>
+                    <span className="text-4xl font-mono text-muted-foreground">/{config.goal}</span>
+                    <p className="text-2xl text-muted-foreground mt-2">{config.title}</p>
+                </>
+            ) : (
+                <div className="text-center">
+                    <h2 className="text-5xl font-bold font-headline mb-4">
+                        {isGoalReached ? "Challenge Complete!" : "Time's Up!"}
+                    </h2>
+                    <p className="text-2xl text-muted-foreground mb-2">You landed</p>
+                    <p className="text-8xl font-bold font-mono text-primary mb-4">{currentCount} <span className="text-6xl">{config.strikeType}</span></p>
+                    <p className="text-xl text-muted-foreground">
+                        {isGoalReached ? `You did it in ${SESSION_DURATION - timeRemaining} seconds!` : "Better luck next time!"}
+                    </p>
+                </div>
+            )}
+            </div>
+        </div>
+
+        <div className="w-full max-w-xs mt-auto flex flex-col gap-4">
+          {(sessionState === "idle" || sessionState === "finished") && (
+            <Alert>
+              <Info className="h-4 w-4" />
+              <AlertTitle>Pro Tips for Best Results</AlertTitle>
+              <AlertDescription>
+                <ul className="list-disc list-inside text-xs">
+                  <li>Ensure you are in a well-lit area.</li>
+                  <li>Have a clear, non-cluttered background.</li>
+                  <li>Stay centered in the video frame.</li>
+                  <li>Full body should be visible for kicks.</li>
+                </ul>
+              </AlertDescription>
+            </Alert>
+          )}
+          <Button
+            onClick={handleStartButtonClick}
+            size="lg"
+            className={`w-full h-16 text-2xl font-bold ${sessionState === "running" ? "bg-destructive hover:bg-destructive/90" : ""}`}
+            disabled={hasCameraPermission !== true}
+          >
+            {sessionState === "finished" && isGoalReached ? "New Challenge" : buttonText[sessionState]}
+          </Button>
+           {sessionState === "finished" && (
+             <Button variant="outline" onClick={handleBackToSelection}>Choose Different Challenge</Button>
+           )}
+        </div>
+      </div>
+    );
+  };
+  
 
   return (
     <div className="flex flex-col h-screen bg-background text-foreground p-4">
@@ -175,51 +319,7 @@ export default function Home() {
           </div>
         )}
 
-        <div className="relative z-10 w-full flex flex-col items-center justify-center h-full p-4">
-          <div className="absolute top-4 text-6xl font-bold text-accent font-mono tabular-nums bg-background/50 backdrop-blur-sm px-4 py-2 rounded-lg">
-            {timeRemaining}
-          </div>
-
-          <div className="flex-1 flex items-center justify-center w-full">
-            <div className="grid grid-cols-2 gap-8 text-center w-full max-w-md">
-              <div className="flex flex-col items-center gap-2">
-                <PunchIcon className="w-16 h-16 text-primary" />
-                <span className="text-7xl font-bold font-mono tabular-nums text-foreground transition-all duration-300">{punches}</span>
-                <span className="text-xl text-muted-foreground">Punches</span>
-              </div>
-              <div className="flex flex-col items-center gap-2">
-                <KickIcon className="w-16 h-16 text-primary" />
-                <span className="text-7xl font-bold font-mono tabular-nums text-foreground transition-all duration-300">{kicks}</span>
-                <span className="text-xl text-muted-foreground">Kicks</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="w-full max-w-xs mt-auto flex flex-col gap-4">
-            {sessionState !== "running" && (
-              <Alert>
-                <Info className="h-4 w-4" />
-                <AlertTitle>Pro Tips for Best Results</AlertTitle>
-                <AlertDescription>
-                  <ul className="list-disc list-inside text-xs">
-                    <li>Ensure you are in a well-lit area.</li>
-                    <li>Have a clear, non-cluttered background.</li>
-                    <li>Stay centered in the video frame.</li>
-                    <li>Full body should be visible for kicks.</li>
-                  </ul>
-                </AlertDescription>
-              </Alert>
-            )}
-            <Button
-              onClick={handleButtonClick}
-              size="lg"
-              className={`w-full h-16 text-2xl font-bold ${sessionState === "running" ? "bg-destructive hover:bg-destructive/90" : ""}`}
-              disabled={hasCameraPermission !== true}
-            >
-              {buttonText[sessionState]}
-            </Button>
-          </div>
-        </div>
+        {selectedGame ? renderTrainingSession() : renderGameSelection()}
       </main>
     </div>
   );
