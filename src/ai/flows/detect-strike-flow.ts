@@ -1,3 +1,4 @@
+
 'use server';
 
 /**
@@ -25,11 +26,17 @@ const detectStrikePrompt = ai.definePrompt({
   name: 'detectStrikePrompt',
   input: { schema: DetectStrikeInputSchema },
   output: { schema: DetectStrikeOutputSchema },
-  prompt: `You are a Muay Thai referee. Analyze the image and determine if the person is throwing a punch, a kick, or doing nothing.
-  
-  Image: {{media url=imageDataUri}}
-  
-  Respond with "punch", "kick", or "none".`,
+  prompt: `You are an expert Muay Thai referee. Your task is to analyze an image and determine if the person is in the middle of throwing a punch or a kick.
+
+Analyze the provided image.
+Image: {{media url=imageDataUri}}
+
+Based on the person's posture, arm and leg extension, and body rotation, determine the action.
+- If they are throwing a punch (a jab, cross, hook, or uppercut), respond with "punch".
+- If they are throwing a kick (a teep, roundhouse, or knee), respond with "kick".
+- If they are not actively throwing a strike (e.g., they are in a neutral stance, preparing, or retracting a strike), respond with "none".
+
+Only respond with one of the three options: "punch", "kick", or "none".`,
   model: googleAI('gemini-pro-vision'),
 });
 
