@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { KickIcon, PunchIcon } from "@/components/icons";
 import { LayoutDashboard, Trophy } from "lucide-react";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { useToast } from "@/hooks/use-toast";
 
 type SessionState = "idle" | "running" | "finished";
 
@@ -17,7 +19,33 @@ export default function Home() {
   const [kicks, setKicks] = useState(0);
   const [punches, setPunches] = useState(0);
   const [topScore, setTopScore] = useState(0);
+  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const { toast } = useToast();
 
+  useEffect(() => {
+    const getCameraPermission = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        setHasCameraPermission(true);
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (error) {
+        console.error('Error accessing camera:', error);
+        setHasCameraPermission(false);
+        toast({
+          variant: 'destructive',
+          title: 'Camera Access Denied',
+          description: 'Please enable camera permissions in your browser settings to use this app.',
+        });
+      }
+    };
+
+    getCameraPermission();
+  }, [toast]);
+  
   useEffect(() => {
     const storedTopScore = localStorage.getItem("topScore");
     if (storedTopScore) {
@@ -96,9 +124,20 @@ export default function Home() {
       </header>
       
       <main className="flex-1 flex flex-col items-center justify-center relative">
-        <div className="absolute inset-0 w-full h-full bg-card rounded-xl border-2 border-dashed border-border flex items-center justify-center">
-          <p className="text-muted-foreground">Camera Feed Area</p>
+        <div className="absolute inset-0 w-full h-full bg-card rounded-xl border-2 border-dashed border-border flex items-center justify-center overflow-hidden">
+          <video ref={videoRef} className="w-full h-full object-cover" autoPlay muted playsInline />
         </div>
+        
+        {hasCameraPermission === false && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+            <Alert variant="destructive" className="max-w-sm">
+                <AlertTitle>Camera Access Required</AlertTitle>
+                <AlertDescription>
+                  Please allow camera access in your browser to use this feature. You might need to refresh the page.
+                </AlertDescription>
+            </Alert>
+          </div>
+        )}
 
         <div className="relative z-10 w-full flex flex-col items-center justify-center h-full p-4">
           <div className="absolute top-4 text-6xl font-bold text-accent font-mono tabular-nums bg-background/50 backdrop-blur-sm px-4 py-2 rounded-lg">
@@ -125,6 +164,7 @@ export default function Home() {
               onClick={handleButtonClick}
               size="lg"
               className={`w-full h-16 text-2xl font-bold ${sessionState === "running" ? "bg-destructive hover:bg-destructive/90" : ""}`}
+              disabled={hasCameraPermission !== true}
             >
               {buttonText[sessionState]}
             </Button>
