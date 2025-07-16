@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, LayoutDashboard, Trophy, User } from "lucide-react";
+import { Home, LayoutDashboard, Trophy, User, Video } from "lucide-react";
 import {
   SidebarProvider,
   Sidebar,
@@ -47,6 +47,14 @@ export default function DashboardLayout({
                 <Link href="/dashboard">
                   <LayoutDashboard />
                   <span>Dashboard</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild isActive={isActive("/analysis")}>
+                <Link href="/analysis">
+                  <Video />
+                  <span>Video Analysis</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
